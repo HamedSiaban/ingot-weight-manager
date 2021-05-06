@@ -19,8 +19,8 @@ static const int PATTERN_INVALID = 100;
 
 //////////////////////////////////////////////////////////// assigning variables
 // defining arduino pins
-const int sensor_left_pin = 1;
-const int sensor_right_pin = 2;
+const int sensor_left_pin = 2;
+const int sensor_right_pin = 3;
 
 // sensor input values
 int sensor_left_currentState = 0;
@@ -34,7 +34,7 @@ int sensorTriggerHistory_pointer = 0;
 int sensorTiggerHistory_pattern = PATTERN_EMPTY;
 
 // Serial data received from bascule
-String serialDataInput = "";
+String basculeSerialDataInput = "";
 int reservedStorageSize = 200;
 
 // flags
@@ -47,6 +47,7 @@ bool isDataReachedNewLine = false;
 // in order to check for any valid patterns
 void updateSensorTriggerHistory(char edge){
   sensorTriggerHistory[sensorTriggerHistory_pointer] = edge;
+  Serial.println(sensorTriggerHistory);
   
   if(sensorTiggerHistory_pattern == PATTERN_EMPTY){ // wich means sensorTriggerHistory_pointer = 0
     if(edge == LEFT_RISE){ // L detected
@@ -64,10 +65,13 @@ void updateSensorTriggerHistory(char edge){
       Serial.println("LR detected");
     }
     else if(sensorTriggerHistory_pointer == 2 && edge == LEFT_FALL){ // LRl detected
+      Serial.println("LRl detected");
     }
     else if(sensorTriggerHistory_pointer == 3 && edge == RIGHT_FALL){ // LRlr detected
+      Serial.println("LRlr detected");
       sensorTiggerHistory_pattern = PATTERN_CARGO_MOVED_FORWARD;
     } else { // invalid pattern detected
+      Serial.println("invalid detected");
       sensorTiggerHistory_pattern = PATTERN_INVALID;
     }
     return;
@@ -75,12 +79,16 @@ void updateSensorTriggerHistory(char edge){
 
   if(sensorTiggerHistory_pattern == PATTERN_CARGO_MOVING_BACKWARD){ // wich means sensorTriggerHistory_pointer = 1,2, or 3
     if(sensorTriggerHistory_pointer == 1 && edge == LEFT_RISE){ // RL detected
+      Serial.println("RL detected");
     }
     else if(sensorTriggerHistory_pointer == 2 && edge == RIGHT_FALL){ // RLr detected
+      Serial.println("RLr detected");
     }
     else if(sensorTriggerHistory_pointer == 3 && edge == LEFT_FALL){ // RLrl detected
+      Serial.println("RLrl detected");
       sensorTiggerHistory_pattern = PATTERN_CARGO_MOVED_BACKWARD;
     } else { // invalid pattern detected
+      Serial.println("invalid detected");
       sensorTiggerHistory_pattern = PATTERN_INVALID;
     }
     return;
@@ -90,9 +98,10 @@ void updateSensorTriggerHistory(char edge){
 
 // resets everything that works with pattern detecting
 void resetSensorTriggerHistory(){
-  char sensorTriggerHistory[] = {UNDEFINED, UNDEFINED, UNDEFINED, UNDEFINED};
-  int sensorTriggerHistory_pointer = 0;
-  int sensorTiggerHistory_pattern = PATTERN_EMPTY;
+  memset(sensorTriggerHistory, UNDEFINED, sizeof(sensorTriggerHistory)); // fills the array with Undefined
+  sensorTriggerHistory_pointer = 0;
+  sensorTiggerHistory_pattern = PATTERN_EMPTY;
+  Serial.println("history reset...");
 }
 ///////////////////////////////////////////////////
 
@@ -104,8 +113,10 @@ void setup(){
 
   // initialize serial communication
   Serial.begin(9600);
-  // reserve 200 bytes for the serialDataInput
-  serialDataInput.reserve(200);
+  Serial1.begin(9600);
+  // reserve 200 bytes for the basculeSerialDataInput
+  basculeSerialDataInput.reserve(reservedStorageSize);
+  Serial.println("setup done");
 }
 
 
@@ -113,9 +124,9 @@ void loop(){
 
   // print the string when a newline arrives:
   if (isDataReachedNewLine) {
-    Serial.println(serialDataInput);
+    //Serial.println(basculeSerialDataInput);
     // clear the string:
-    serialDataInput = "";
+    //basculeSerialDataInput = "";
     isDataReachedNewLine = false;
   }
 
@@ -128,6 +139,7 @@ void loop(){
   // starting edge detection
   if(sensor_left_currentState != sensor_left_previousState){ // left sensor detected a change
   isEdgeDetected = true;
+  sensor_left_previousState = sensor_left_currentState;
 
     if(sensor_left_currentState == HIGH){ // rising edge detected from the left sensor
       updateSensorTriggerHistory(LEFT_RISE);
@@ -138,6 +150,7 @@ void loop(){
 
   if(sensor_right_currentState != sensor_right_previousState){ // right sensor detected a change
   isEdgeDetected = true;
+  sensor_right_previousState = sensor_right_currentState;
 
     if(sensor_right_currentState == HIGH){ // rising edge detected from the right sensor
       updateSensorTriggerHistory(RIGHT_RISE);
@@ -156,6 +169,7 @@ void loop(){
         break;
       case PATTERN_CARGO_MOVED_FORWARD:
         //TODO get weight and push it into stack
+        Serial.println(basculeSerialDataInput);
         resetSensorTriggerHistory();
         break;
       case PATTERN_CARGO_MOVED_BACKWARD:
@@ -172,12 +186,12 @@ void loop(){
 
 }
 
-void serialEvent() {
-  while (Serial.available()) {
+void serialEvent1() {
+  while (Serial1.available()) {
     // get the new byte:
-    char inputCharacter = (char)Serial.read();
+    char inputCharacter = (char)Serial1.read();
     // add it to the inputString:
-    serialDataInput += inputCharacter;
+    basculeSerialDataInput += inputCharacter;
     // if the incoming character is a newline, set a flag so the main loop can
     // do something about it:
     if (inputCharacter == '\n') {
