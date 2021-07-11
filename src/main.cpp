@@ -35,12 +35,14 @@ int sensorTiggerHistory_pattern = PATTERN_EMPTY;
 
 // these manage serial2 data received from bascule
 String basculeSerialDataInput = "";
+// order of weights going forward:
+// lastBasculeNumber -> currentWeight -> previousWeight -> weightQueue[]
 int lastBasculeNumber = 0;
 int previousWeight = 0;
 int currentWeight = 0;
 
-int weightQueue[3] = {};
-int weightQueue_size = 3;
+int weightQueue[180] = {};
+int weightQueue_size = 180;
 int weightQueue_pointer = 0;
 
 // flags
@@ -194,10 +196,8 @@ void loop(){
         sensorTriggerHistory_pointer++;
         break;
       case PATTERN_CARGO_MOVED_FORWARD:
-        //get current weight and push previous non-zero weight into weight queue
-        currentWeight = lastBasculeNumber;
         if(previousWeight != 0){ // if previousWeight==0 it means it's either the first weight or we had a cargo moved backward before this.
-          if (isWeightQueueFull){ // if the flag is on, send the weight to pc because it will be overwritten.
+          if (isWeightQueueFull){ // if the flag is on, send the oldest weight to pc because it will be overwritten.
             log("***this weight sent to the pc:  ");
             logln(weightQueue[weightQueue_pointer]);
           }
@@ -209,11 +209,15 @@ void loop(){
             weightQueue_pointer++;
           }
         }
+        // previous weight will be thrown into the furnace on the next cargo moved forward.
         previousWeight = currentWeight;
+        // curent weight is the first weight we get
+        currentWeight = lastBasculeNumber;
         resetSensorTriggerHistory();
         break;
       case PATTERN_CARGO_MOVED_BACKWARD:
         //nullify the previous weight so when the cargo moves forward again, it won't enque
+        currentWeight = previousWeight;
         previousWeight = 0;
         resetSensorTriggerHistory();
         break;
@@ -245,7 +249,10 @@ void loop(){
 
   if (isBasculeDataReachedNewLine){
     //log("rached new line");
+    Serial.println("bascule serial data input: " + basculeSerialDataInput);
+    basculeSerialDataInput = basculeSerialDataInput.substring(basculeSerialDataInput.indexOf("p+  " + 4));
     lastBasculeNumber = basculeSerialDataInput.toInt();
+    Serial.println("bascule serial number: " + lastBasculeNumber);
     //Serial.println(lastBasculeNumber);
 
     //log(basculeSerialDataInput);
